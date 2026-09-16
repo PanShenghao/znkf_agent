@@ -1,0 +1,12 @@
+.git
+.gitignore
+.venv
+**/__pycache__
+**/*.pyc
+.idea
+agent/.env
+.env
+docs
+front/node_modules
+front/dist
+*.pdf

@@ -1,0 +1,78 @@
+# Chatwoot 自托管（可选）：真人坐席工作台，承接「转人工」会话。
+# 用法（与主 compose 合并启动）：
+#   docker compose -f docker-compose.yml -f docker-compose.chatwoot.yml up -d --build
+# 首次启动步骤：
+#   1) 打开 http://localhost:3000 注册管理员账号
+#   2) 设置 → 收件箱 → 新建「API」渠道，得到 inbox_id
+#   3) 个人资料 → Access Token 生成 access token；account_id 在 URL 里
+#   4) 把 CHATWOOT_ACCESS_TOKEN / CHATWOOT_ACCOUNT_ID / CHATWOOT_API_INBOX_ID 填进根 .env
+#      （backend 容器内的 CHATWOOT_URL 用 http://chatwoot-rails:3000）
+services:
+  chatwoot-postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: chatwoot_production
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${CHATWOOT_POSTGRES_PASSWORD:-chatwoot123}
+    volumes:
+      - chatwoot_postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  chatwoot-redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  chatwoot-rails:
+    image: chatwoot/chatwoot:latest
+    command: ["bundle", "exec", "rails", "s", "-p", "3000", "-b", "0.0.0.0"]
+    entrypoint: docker/entrypoints/rails.sh
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: production
+      RAILS_ENV: production
+      INSTALLATION_ENV: docker
+      SECRET_KEY_BASE: ${CHATWOOT_SECRET_KEY_BASE:-please-change-me-0123456789}
+      FRONTEND_URL: ${CHATWOOT_FRONTEND_URL:-http://localhost:3000}
+      DATABASE_URL: postgres://postgres:${CHATWOOT_POSTGRES_PASSWORD:-chatwoot123}@chatwoot-postgres:5432/chatwoot_production
+      REDIS_URL: redis://chatwoot-redis:6379
+      RAILS_LOG_TO_STDOUT: "true"
+    volumes:
+      - chatwoot_storage:/app/storage
+    depends_on:
+      chatwoot-postgres:
+        condition: service_healthy
+      chatwoot-redis:
+        condition: service_healthy
+
+  chatwoot-sidekiq:
+    image: chatwoot/chatwoot:latest
+    command: ["bundle", "exec", "sidekiq", "-C", "config/sidekiq.yml"]
+    entrypoint: docker/entrypoints/rails.sh
+    environment:
+      NODE_ENV: production
+      RAILS_ENV: production
+      INSTALLATION_ENV: docker
+      SECRET_KEY_BASE: ${CHATWOOT_SECRET_KEY_BASE:-please-change-me-0123456789}
+      DATABASE_URL: postgres://postgres:${CHATWOOT_POSTGRES_PASSWORD:-chatwoot123}@chatwoot-postgres:5432/chatwoot_production
+      REDIS_URL: redis://chatwoot-redis:6379
+      RAILS_LOG_TO_STDOUT: "true"
+    volumes:
+      - chatwoot_storage:/app/storage
+    depends_on:
+      chatwoot-postgres:
+        condition: service_healthy
+      chatwoot-redis:
+        condition: service_healthy
+
+volumes:
+  chatwoot_postgres:
+  chatwoot_storage:

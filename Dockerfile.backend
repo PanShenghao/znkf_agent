@@ -1,0 +1,23 @@
+# 后端镜像：FastAPI + agent 核心（含 MCP stdio 子进程所需的一切依赖）
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# 先装依赖（利用镜像层缓存 + pip 缓存挂载，改依赖后重装更快）
+COPY requirements.txt ./
+RUN --mount=type=cache,target=/root/.cache/pip pip install -r requirements.txt
+
+# 拷贝后端 + agent + 脚本 + mock 数据
+COPY agent ./agent
+COPY app ./app
+COPY scripts ./scripts
+COPY mock_data ./mock_data
+
+# config/core/agents/tools 在 agent/ 下，app 在 app/ 下，统一加进 PYTHONPATH
+ENV PYTHONPATH=/app:/app/agent:/app/app
+ENV PYTHONUNBUFFERED=1
+
+EXPOSE 5000
+
+# 默认启动后端（docker-compose 里可用 working_dir + command 覆盖）
+CMD ["uvicorn", "app_main:app", "--host", "0.0.0.0", "--port", "5000"]
