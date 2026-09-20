@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "shop_platform": {
+      "command": "python",
+      "args": ["-m", "mcp_servers.shop_platform_server"],
+      "cwd": "agent",
+      "transport": "stdio"
+    }
+  }
+}
